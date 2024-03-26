@@ -18,4 +18,4 @@ class MaksavitPagesSpider(scrapy.Spider):
 
 
 
-# scrapy crawl maksavit_pages -a region=novosibirsk
+# scrapy crawl maksavit_pages -a region=novosibirsk -a category=materinstvo_i_detstvo -a subcategory=detskaya_gigiena
