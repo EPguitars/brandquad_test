@@ -82,7 +82,13 @@ class MaksavitScraperDownloaderMiddleware:
 
     def process_response(self, request, response, spider):
         # Called with the response returned from the downloader.
-
+        
+        # Если получаем такой статус то нам нужно поменять куки и прокси
+        # Подразумевается что используются статичные прокси
+        # Это значит кто куки должны быть привязаны к адресу прокси
+        if response.status == 401:
+            # do something
+            pass
         # Must either;
         # - return a Response object
         # - return a Request object
@@ -101,3 +107,9 @@ class MaksavitScraperDownloaderMiddleware:
 
     def spider_opened(self, spider):
         spider.logger.info("Spider opened: %s" % spider.name)
+
+
+class CustomProxy(object):
+    def process_request(self, request, spider):
+        # Укажите свой прокси-сервер в формате "http://<логин>:<пароль>@<адрес>:<порт>"
+        request.meta["proxy"] = ""

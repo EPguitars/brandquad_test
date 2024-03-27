@@ -3,7 +3,59 @@
 # See documentation in:
 # https://docs.scrapy.org/en/latest/topics/items.html
 
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
+
+
+def check_discount(old_price: float, current_price: float):
+    """ calculate discount """
+    return round((1 - current_price / old_price) * 100)
+
+
+@dataclass
+class PriceData:
+    original: float = None
+    current: float = None
+    sale_tag: str = None
+
+    def __post_init__(self):
+        if self.current is None:
+            self.current = self.original
+        
+        if self.sale_tag is None and self.original:
+            self.sale_tag = f"Скидка {check_discount(self.original, self.current)}%"
+        
+        else:
+            self.sale_tag = None
+
+
+@dataclass
+class StockData:
+    in_stock: bool
+    count: int = 0
+
+
+@dataclass
+class MediaAssets:
+    main_image: str = None
+    set_images: list[str] = None
+    view360: list[str] = None
+    video: list[str] = None
+
+    def __post_init__(self):
+        if not self.set_images:
+            self.set_images = [self.main_image]
+
+
+@dataclass
+class AdditionalInfo:
+    __description: str = None
+
+    def __post_init__(self, **kwargs):
+        for field in fields(self):
+            
+            if field.name in kwargs:
+                setattr(self, field.name, kwargs[field.name])
+
 
 @dataclass
 class MaksavitScraperItem:
@@ -27,8 +79,23 @@ class MaksavitScraperItem:
     # Если тэг представлен в виде изображения собирать его не нужно.
     marketing_tags: list 
     
+    # Информация о цене товара
+    # "price_data": {
+    #         "current": float,  # Цена со скидкой, если скидки нет то = original.
+    #         "original": float,  # Оригинальная цена.
+    #         "sale_tag": "str"  # Если есть скидка на товар то необходимо вычислить процент скидки и записать формате: "Скидка {discount_percentage}%".
+    #           },
+    price_data: PriceData
+
+    # Словарь с информацией о наличии товара
+    #   stock: {
+    #    "in_stock": bool,  # Есть товар в наличии в магазине или нет.
+    #    "count": int  # Если есть возможность получить информацию о количестве оставшегося товара в наличии, иначе 0.
+    #     }     
+    stock: dict
+
     # Бренд товара.
-    brand: str 
+    brand: str = None
 
     # Иерархия разделов
     # Например: [
@@ -36,24 +103,8 @@ class MaksavitScraperItem:
     #            'Развивающие и интерактивные игрушки', 
     #            'Интерактивные игрушки'
     #           ]
-    section: list[str] 
+    section: list[str] = None
     
-    # Информация о цене товара
-    # "price_data": {
-    #         "current": float,  # Цена со скидкой, если скидки нет то = original.
-    #         "original": float,  # Оригинальная цена.
-    #         "sale_tag": "str"  # Если есть скидка на товар то необходимо вычислить процент скидки и записать формате: "Скидка {discount_percentage}%".
-    #           },
-
-    price_data: dict
-
-    # Словарь с информацией о наличии товара
-    #    {
-    #    "in_stock": bool,  # Есть товар в наличии в магазине или нет.
-    #    "count": int  # Если есть возможность получить информацию о количестве оставшегося товара в наличии, иначе 0.
-    #     }     
-    stock: dict
-
     # Данные о медиа
     #    "assets": {
     #         "main_image": "str",  # Ссылка на основное изображение товара.
@@ -61,7 +112,7 @@ class MaksavitScraperItem:
     #         "view360": ["str"],  # Список ссылок на изображения в формате 360.
     #         "video": ["str"]  # Список ссылок на видео/видеообложки товара.
     #          }
-    assets: dict
+    assets: MediaAssets = None
 
     # Дополнительная информация о товаре
     #     "metadata": {
@@ -73,10 +124,8 @@ class MaksavitScraperItem:
     # Также в metadata необходимо добавить все характеристики товара которые могут быть на странице.
     # Например: Артикул, Код товара, Цвет, Объем, Страна производитель и т.д.
     # Где KEY - наименование характеристики.
-    metadata: dict
+    metadata: AdditionalInfo = None
 
     # Кол-во вариантов у товара в карточке 
     # (За вариант считать только цвет или объем/масса. Размер у одежды или обуви варинтами не считаются).
-    variants: int
-
-
+    variants: int = 0
