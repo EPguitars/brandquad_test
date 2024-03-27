@@ -3,7 +3,7 @@
 # See documentation in:
 # https://docs.scrapy.org/en/latest/topics/items.html
 
-from dataclasses import dataclass, fields
+from dataclasses import dataclass
 
 
 def check_discount(old_price: float, current_price: float):
@@ -47,19 +47,8 @@ class MediaAssets:
 
 
 @dataclass
-class AdditionalInfo:
-    __description: str = None
-
-    def __post_init__(self, **kwargs):
-        for field in fields(self):
-            
-            if field.name in kwargs:
-                setattr(self, field.name, kwargs[field.name])
-
-
-@dataclass
 class MaksavitScraperItem:
-    """ Target item model for maksavit.ru """
+    """ Модель данных для товара с maksavit.ru """
     
     # Дата и время сбора товара в формате timestamp.
     timestamp: int 
@@ -124,7 +113,7 @@ class MaksavitScraperItem:
     # Также в metadata необходимо добавить все характеристики товара которые могут быть на странице.
     # Например: Артикул, Код товара, Цвет, Объем, Страна производитель и т.д.
     # Где KEY - наименование характеристики.
-    metadata: AdditionalInfo = None
+    metadata: dict = None
 
     # Кол-во вариантов у товара в карточке 
     # (За вариант считать только цвет или объем/масса. Размер у одежды или обуви варинтами не считаются).
