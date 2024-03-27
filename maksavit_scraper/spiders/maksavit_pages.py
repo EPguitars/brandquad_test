@@ -1,8 +1,13 @@
 from datetime import datetime
-from urllib.parse import urljoin
+from urllib.parse import (urljoin, 
+                          urlparse, 
+                          parse_qsl, 
+                          urlencode, 
+                          urlunparse)
 
 import scrapy
 from scrapy.selector import Selector
+from scrapy.exceptions import CloseSpider
 from scrapy.crawler import CrawlerProcess
 from rich import print # удалить в конце
 
@@ -12,8 +17,7 @@ from cookies import Cooker, cookie_string
 from items import (MaksavitScraperItem,
                    PriceData,
                    StockData,
-                   MediaAssets
-                   )
+                   MediaAssets)
 
 
 class MaksavitPagesSpider(scrapy.Spider):
@@ -22,18 +26,37 @@ class MaksavitPagesSpider(scrapy.Spider):
     # этот аттрибут нужен для конструирования ссылок
     base_url = "https://maksavit.ru"
     cookies = Cooker(cookie_string).cookie_dict
-
+    items_counter = dict()
 
     def __init__(self, 
-                 region=None, 
-                 category_path=None, 
+                 region: str=None, 
+                 categories: list[str]=None, 
+                 items_amount: str=None,
                 *args, 
                 **kwargs):   
         """
         Метод переназначен для передачи аргументов
         """
         super(MaksavitPagesSpider, self).__init__(*args, **kwargs)
-        self.start_urls = [f"https://maksavit.ru/{region}/catalog/{category_path}"]
+        self.items_countrt = int(items_amount)
+
+        if len(categories) < 3:
+            raise CloseSpider("You should pass at least 3 categories")
+
+        else:
+            for category_path in categories:
+                url = f"https://maksavit.ru/{region}/catalog/{category_path}"
+                
+                if category_path[-1] == "/":
+                    self.start_urls.append(f"{url}")               
+                else:
+                    self.start_urls.append(f"{url}/")
+        
+        if items_amount:
+            self.items_counter = int(items_amount)
+        
+        else:
+            raise CloseSpider("You should pass at least 50 items to scrape")
 
 
     def start_requests(self):
@@ -47,6 +70,7 @@ class MaksavitPagesSpider(scrapy.Spider):
                 headers=headers,
                 cookies=self.cookies,
                 dont_filter=True,
+                meta={"counter" : self.items_counter}
             )
             yield request
 
@@ -130,20 +154,28 @@ class MaksavitPagesSpider(scrapy.Spider):
         """
         old_price = card.css("div.product-price__old-price::text")
         current_price = card.css("div.product-price__current-price > span::text")
+        # Другой сценарий расположения цены
+        if not current_price:
+            current_price = card.css("span.isg-offer__tab-price::text")
 
-        if not old_price:
-            return PriceData(
-                current=int(current_price.re_first(r"\d+").strip()),
-            )
-        
-        elif not current_price:
-            self.looger.warning("No current price found on the card, requires recheck")
+        if not current_price:
+            self.logger.warning("No current price found on the card, requires recheck")
             return None
 
-        else:
+        if not old_price:
+            current = int("".join(current_price[0].re(r"\d+")).strip())
             return PriceData(
-                current=int(current_price.re_first(r"\d+").strip()),
-                original=int(old_price.re_first(r"\d+").strip()),
+                current=current,
+                original=current
+            )
+
+        else:
+            current=int("".join(current_price[0].re(r"\d+")).strip())
+            original=int("".join(old_price.re(r"\d+")).strip())
+
+            return PriceData(
+                current=current,
+                original=original,
             )
 
 
@@ -188,7 +220,7 @@ class MaksavitPagesSpider(scrapy.Spider):
     
     def parse_section(self, response) -> list[str]:
         """
-        Извлекает хленые крошки
+        Извлекает хлебные крошки
         """
         breadcrumbs = response.css("ul.breadcrumbs > li")
         
@@ -239,12 +271,44 @@ class MaksavitPagesSpider(scrapy.Spider):
                 else:
                     additional_info[header] = content[1].strip()
             
-            print(additional_info)
             return additional_info
         
         else:
             self.logger.warning("No additional info found on the page, requires recheck")
             return None
+
+
+    def add_query_to_url(self, existing_url, new_query_params):
+        """ 
+        Реконструирует url с новыми параметрами 
+        """
+        parsed_url = list(urlparse(existing_url))
+        parsed_url[4] = urlencode(
+            {**dict(parse_qsl(parsed_url[4])), **new_query_params})
+        return urlunparse(parsed_url)
+
+
+    def generate_next_page_url(self, response) -> str:
+        """
+        Генерирует ссылку на следующую страницу
+        """
+        pagination_bar = response.css("ul.ui-pagination > li")
+        
+        if pagination_bar:
+            last_page = int(pagination_bar[-2].css("::text").get())
+            current_page = int(pagination_bar.css("a.ui-pagination__item_checked::text").get())
+            current_url = response.request.url
+            next_page = current_page + 1
+
+            if next_page <= last_page:
+                return self.add_query_to_url(current_url, {"page": next_page})
+            else:
+                return None
+
+        else:
+            self.logger.warning("No pagination bar found on the page, requires recheck")
+            return None
+
 
     
     def parse(self, response):
@@ -254,13 +318,15 @@ class MaksavitPagesSpider(scrapy.Spider):
         остальные данные я получаю переходя на страницу товара
         и в качестве колбэка использую уже метод parse_item
         """
-        
         # Для начала генерируем селекторы для каждой карточки товара
         cards = self.extract_cards(response)
+        # Переносим счётчик в переменную
+        items_counter = response.meta["counter"]
 
         if cards:
             # Проходимся по каждой карточке и извлекаем то что можно извлечь
             for card in cards:
+
                 item = MaksavitScraperItem(
                     timestamp=int(datetime.now().timestamp()),
                     RPC=self.parse_rpc(card),
@@ -271,6 +337,7 @@ class MaksavitPagesSpider(scrapy.Spider):
                     stock=self.parse_stock_data(card)
                 )
                 
+                
                 # Генерируем новый Request с собранными данными
                 yield scrapy.Request(
                     item.url,
@@ -278,15 +345,33 @@ class MaksavitPagesSpider(scrapy.Spider):
                     headers=headers,
                     cookies=self.cookies,
                     dont_filter=True,
-                    meta={"item": item},
+                    meta={
+                        "item": item},
                 )
 
-                break
-        
+                # Останавливаемся когда соберём указанное количество товаров
+                items_counter -= 1
+
+                if items_counter <= 0:
+                    break
             
             else:
-                pass
-        
+                # Отдаём новый Request со следующей страницей
+                next_page = self.generate_next_page_url(response)
+
+                if next_page:
+                    yield scrapy.Request(
+                        next_page,
+                        callback=self.parse,
+                        headers=headers,
+                        cookies=self.cookies,
+                        dont_filter=True,
+                        meta={"counter": items_counter}
+                    )
+                else:
+                    self.logger.info("No more pages, scraping category is done!")
+                    return None
+
         else:
             self.logger.warning("No cards found on the page, requires recheck")
             return None
@@ -305,15 +390,26 @@ class MaksavitPagesSpider(scrapy.Spider):
 
         yield item
 
-# для теста
-# scrapy crawl maksavit_pages -a region=novosibirsk -a category=materinstvo_i_detstvo -a subcategory=detskaya_gigiena
 
 if __name__ == "__main__":
+    # Для теста
+    categories = ["kosmetologiya/ukhod_za_volosami/",
+                    "materinstvo_i_detstvo/detskaya_gigiena",
+                  "ukhod_za_bolnym/vzroslye_podguzniki"
+                  ]
     
-    process = CrawlerProcess()
+    process = CrawlerProcess(
+        settings={
+            'ITEM_PIPELINES': {
+            "pipelines.MaksavitScraperPipeline": 300,
+            }}
+    )
+    # parameter to write into json file
     process.crawl(MaksavitPagesSpider, 
                   region="novosibirsk", 
-                  category_path="materinstvo_i_detstvo/detskaya_gigiena")
+                  categories=categories,
+                  items_amount=50,
+                  )
     
     process.start()
     
