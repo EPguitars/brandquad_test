@@ -38,7 +38,7 @@ class MaksavitPagesSpider(scrapy.Spider):
         Метод переназначен для передачи аргументов
         """
         super(MaksavitPagesSpider, self).__init__(*args, **kwargs)
-        self.items_countrt = int(items_amount)
+        self.items_counter = int(items_amount)
 
         if len(categories) < 3:
             raise CloseSpider("You should pass at least 3 categories")
