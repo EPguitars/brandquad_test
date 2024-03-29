@@ -393,12 +393,21 @@ class MaksavitPagesSpider(scrapy.Spider):
 
 if __name__ == "__main__":
     # Для теста
+    # Заполните это категорию путями в формате категория/подкатегория
+    # Минимально 3 ( требование тз )
     categories = [
                     "kosmetologiya/ukhod_za_volosami/",
                     "materinstvo_i_detstvo/detskaya_gigiena",
                     "ukhod_za_bolnym/vzroslye_podguzniki"
                   ]
     
+    # Укажите регион в латинской транслитерации
+    region = "novosibirsk"
+    # Укажите минимальное количество товаров
+    # для сбора с одной категории
+    # Минимально 50 ( требование тз )
+    items_amount = 50
+
     process = CrawlerProcess(
         settings={
             'ITEM_PIPELINES': {
@@ -406,11 +415,11 @@ if __name__ == "__main__":
             }
             }
     )
-    # parameter to write into json file
+
     process.crawl(MaksavitPagesSpider, 
-                  region="novosibirsk", 
+                  region=region, 
                   categories=categories,
-                  items_amount=50,
+                  items_amount=items_amount,
                   )
     
     process.start()
