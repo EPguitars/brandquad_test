@@ -52,7 +52,7 @@ class MaksavitPagesSpider(scrapy.Spider):
                 else:
                     self.start_urls.append(f"{url}/")
         
-        if items_amount:
+        if items_amount >= 50:
             self.items_counter = int(items_amount)
         
         else:
