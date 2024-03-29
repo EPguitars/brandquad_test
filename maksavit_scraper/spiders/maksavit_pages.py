@@ -393,16 +393,18 @@ class MaksavitPagesSpider(scrapy.Spider):
 
 if __name__ == "__main__":
     # Для теста
-    categories = ["kosmetologiya/ukhod_za_volosami/",
+    categories = [
+                    "kosmetologiya/ukhod_za_volosami/",
                     "materinstvo_i_detstvo/detskaya_gigiena",
-                  "ukhod_za_bolnym/vzroslye_podguzniki"
+                    "ukhod_za_bolnym/vzroslye_podguzniki"
                   ]
     
     process = CrawlerProcess(
         settings={
             'ITEM_PIPELINES': {
             "pipelines.MaksavitScraperPipeline": 300,
-            }}
+            }
+            }
     )
     # parameter to write into json file
     process.crawl(MaksavitPagesSpider, 
